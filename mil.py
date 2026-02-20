@@ -1,139 +1,185 @@
-"""
-ATC PREPARATION READINESS — REALTIME 2026 DATA
-Fetches live military fleet rankings, classifies national effort
-"""
-
 import numpy as np
 import requests
 from collections import defaultdict
 import re
 
 print("=" * 130)
-print("🚀 REALTIME ATC PREPARATION CLASSIFICATION — FEB 2026 DATA")
+print("🚀 REALTIME ATC PREPARATION CLASSIFICATION — MULTI-MONTH COMPARISON (DEC 2025 / JAN 2026 / FEB 2026)")
 print("=" * 130)
 
 # =============================================================================
-# LIVE DATA FETCH (2026 Military Aircraft)
+# LIVE DATA FETCH (End-2025 Military Aircraft)
 # =============================================================================
 
 def fetch_realtime_fleets():
-    """Fetch latest military aircraft data from multiple sources."""
+    """Fetch latest military aircraft data with live requests."""
     print("📡 Fetching realtime military fleet data...")
-    
-    # Global Firepower 2026 (total aircraft)
+
     gfp_fleets = {
         'USA': 13209, 'RUS': 4255, 'CHN': 3304, 'IND': 2296, 'KOR': 1576,
         'JPN': 1459, 'PAK': 1434, 'EGY': 1080, 'TUR': 1069, 'FRA': 972,
-        'PRK': 951, 'SAU': 914, 'ITA': 800, 'TWN': 750, 'GBR': 664
+        'PRK': 951, 'SAU': 914, 'ITA': 800, 'TWN': 750, 'GBR': 664,
+        'DEU': 618, 'ESP': 513
     }
-    
+
     try:
         resp = requests.get("https://www.globalfirepower.com/aircraft-total.php", timeout=5)
         if resp.status_code == 200:
-            # Parse live rankings (GFP format)
-            matches = re.findall(r'(\w+)</td>\s*<td>(\d+)', resp.text)
-            for country, count in matches[:10]:
+            matches = re.findall(r'(\w+)</td>\s*<td>(\d+)', resp.text, re.IGNORECASE)
+            for country, count in matches[:20]:
                 gfp_fleets[country.upper()] = int(count)
-            print("   ✓ Global Firepower live data")
-    except:
-        print("   ⚠ GFP fallback to cached")
-    
-    # Worldostats Combat Aircraft 2026 [web:72]
+            print("   ✓ Global Firepower live update")
+    except Exception as e:
+        print(f"   ⚠ Live fetch failed: {e} — using cached")
+
     combat_fleets = {
         'USA': 2803, 'RUS': 1538, 'CHN': 1334, 'IND': 686, 'PRK': 572,
-        'KOR': 467, 'PAK': 450, 'EGY': 427, 'FRA': 265, 'JPN': 261
+        'KOR': 467, 'PAK': 450, 'EGY': 427, 'FRA': 265, 'JPN': 261,
+        'GBR': 183, 'ITA': 210, 'DEU': 98
     }
-    
+
     print(f"   ✓ Top: USA({gfp_fleets['USA']:,} total) RUS({combat_fleets['RUS']:,} combat)")
     return gfp_fleets, combat_fleets
 
 gfp_fleets, combat_fleets = fetch_realtime_fleets()
 
 # =============================================================================
-# ATC ROUTE FUEL DATA (From optimizer)
+# MULTI-MONTH ROUTE FUEL DATA
+# Replace these values with your actual data for each month
+# Format: (country, ops, fuel_liters)
 # =============================================================================
 
-ROUTE_FUEL = [
-    ('USA', 8112, 473.3), ('GBR', 1400, 450.2), ('FRA', 1300, 420.1),
-    ('DEU', 1200, 380.5), ('IND', 850, 370.4), ('ESP', 1100, 350.3),
-    ('PAK', 800, 340.2), ('ITA', 1000, 320.8)
-]
+MONTHLY_DATA = {
+    'DEC 2025': [
+        ('USA', 8112, 473.3), ('GBR', 1400, 450.2), ('FRA', 1300, 420.1),
+        ('DEU', 1200, 380.5), ('IND', 850, 370.4), ('ESP', 1100, 350.3),
+        ('PAK', 800, 340.2), ('ITA', 1000, 320.8)
+    ],
+    'JAN 2026': [
+        # ✏️ REPLACE with your actual January data
+        ('USA', 8300, 480.1), ('GBR', 1450, 455.0), ('FRA', 1280, 415.5),
+        ('DEU', 1220, 385.0), ('IND', 870, 375.2), ('ESP', 1120, 355.8),
+        ('PAK', 820, 345.0), ('ITA', 1020, 325.3)
+    ],
+    'FEB 2026': [
+        # ✏️ REPLACE with your actual February data
+        ('USA', 8500, 490.5), ('GBR', 1480, 460.3), ('FRA', 1310, 425.0),
+        ('DEU', 1250, 390.2), ('IND', 900, 380.1), ('ESP', 1150, 360.0),
+        ('PAK', 850, 350.5), ('ITA', 1050, 330.7)
+    ],
+}
 
-print("\n📊 REALTIME CLASSIFICATION")
+# =============================================================================
+# CLASSIFICATION FUNCTION
+# =============================================================================
+
+def classify_month(label, route_fuel):
+    print(f"\n📊 CLASSIFICATION — {label}")
+    print("-" * 130)
+
+    nation_effort = []
+    total_global_ops = sum(ops for _, ops, _ in route_fuel)
+
+    for country, ops, fuel in route_fuel:
+        total_fleet = gfp_fleets.get(country, 100)
+        combat_fleet = combat_fleets.get(country, 50)
+
+        effort_score = fuel / (ops / total_fleet) if ops > 0 and total_fleet > 0 else 0
+        pct_global_ops = ops / total_global_ops * 100
+
+        if fuel > 400:
+            level = "🟥 HIGH COMMITMENT"
+        elif fuel > 250:
+            level = "🟨 MAJOR CONTRIBUTOR"
+        elif fuel > 100:
+            level = "🟢 MODERATE SUPPORT"
+        else:
+            level = "🔵 MINIMAL"
+
+        nation_effort.append({
+            'Nation': country, 'Ops': ops, 'Fuel_L': fuel, 'Total_Fleet': total_fleet,
+            'Combat_Fleet': combat_fleet, 'Ops%': round(pct_global_ops, 1),
+            'Effort_Score': round(effort_score, 2), 'Level': level
+        })
+
+    nation_effort.sort(key=lambda x: x['Effort_Score'], reverse=True)
+
+    print(f"{'Nation':<6} {'Ops':<6} {'Fuel':<7} {'Fleet':<8} {'Combat':<7} {'Ops%':<6} {'Score':<8} {'Level'}")
+    print("-" * 130)
+    for row in nation_effort:
+        print(f"{row['Nation']:<6} {row['Ops']:<6,} {row['Fuel_L']:<7.1f} "
+              f"{row['Total_Fleet']:<8,} {row['Combat_Fleet']:<7} "
+              f"{row['Ops%']:<6} {row['Effort_Score']:<8.2f} {row['Level']}")
+
+    return nation_effort
+
+# =============================================================================
+# RUN ALL MONTHS
+# =============================================================================
+
+all_results = {}
+for month_label, data in MONTHLY_DATA.items():
+    all_results[month_label] = classify_month(month_label, data)
+
+# =============================================================================
+# MONTH-OVER-MONTH COMPARISON
+# =============================================================================
+
+print("\n" + "=" * 130)
+print("📈 MONTH-OVER-MONTH COMPARISON — EFFORT SCORE & OPS DELTA")
+print("=" * 130)
+
+months = list(MONTHLY_DATA.keys())
+all_nations = list({row['Nation'] for results in all_results.values() for row in results})
+
+header = f"{'Nation':<6}"
+for m in months:
+    header += f" {m:>18}"
+header += f"  {'Trend'}"
+print(header)
 print("-" * 130)
 
-# Aggregate + classify
-nation_effort = []
-for country, ops, fuel in ROUTE_FUEL:
-    total_fleet = gfp_fleets.get(country, 100)
-    combat_fleet = combat_fleets.get(country, 50)
-    
-    # Realtime metrics
-    effort_score = fuel / (ops / total_fleet) if ops > 0 else 0  # Fuel-normalized commitment
-    pct_global_ops = ops / 15762 * 100
-    
-    # Live classification
-    if fuel > 400:
-        level = "🟥 HIGH COMMITMENT"
-        priority = "STRATEGIC HUB"
-    elif fuel > 250:
-        level = "🟨 MAJOR CONTRIBUTOR" 
-        priority = "REGIONAL POWER"
-    elif fuel > 100:
-        level = "🟢 MODERATE SUPPORT"
-        priority = "TACTICAL"
+for nation in sorted(all_nations):
+    row_str = f"{nation:<6}"
+    scores = []
+    for m in months:
+        match = next((r for r in all_results[m] if r['Nation'] == nation), None)
+        if match:
+            row_str += f"  Score:{match['Effort_Score']:>7.2f} Ops:{match['Ops']:>5,}"
+            scores.append(match['Effort_Score'])
+        else:
+            row_str += f"  {'N/A':>18}"
+            scores.append(None)
+
+    valid = [s for s in scores if s is not None]
+    if len(valid) >= 2:
+        delta = valid[-1] - valid[0]
+        trend = f"▲ +{delta:.2f}" if delta > 0 else (f"▼ {delta:.2f}" if delta < 0 else "● No Change")
     else:
-        level = "🔵 MINIMAL"
-        priority = "STANDBY"
-    
-    nation_effort.append({
-        'Nation': country,
-        'Ops': ops,
-        'Fuel_L': fuel,
-        'Total_Fleet': total_fleet,
-        'Combat_Fleet': combat_fleet,
-        'Ops%': pct_global_ops,
-        'Effort_Score': round(effort_score, 2),
-        'Level': level,
-        'Priority': priority
-    })
+        trend = "—"
+    row_str += f"  {trend}"
+    print(row_str)
 
-# Sort by effort score (fuel-normalized commitment)
-nation_effort.sort(key=lambda x: x['Effort_Score'], reverse=True)
+# =============================================================================
+# STRATEGIC SUMMARY
+# =============================================================================
 
-print(f"{'Nation':<6} {'Ops':<6} {'Fuel':<7} {'Fleet':<8} {'Combat':<7} {'Ops%':<6} {'Score':<8} {'Level'}")
-print("-" * 130)
+print("\n" + "=" * 80)
+print("🟥 STRATEGIC SUMMARY — ALL MONTHS")
+print("=" * 80)
 
-for row in nation_effort:
-    print(f"{row['Nation']:<6} {row['Ops']:<6,} {row['Fuel_L']:<7.1f} "
-          f"{row['Total_Fleet']:<8,} {row['Combat_Fleet']:<7} "
-          f"{row['Ops%']:<6.1f} {row['Effort_Score']:<8.2f} {row['Level']}")
+for month_label, results in all_results.items():
+    top3 = results[:3]
+    total_ops = sum(r['Ops'] for r in results)
+    usa = next((r for r in results if r['Nation'] == 'USA'), None)
+    usa_pct = f"{usa['Ops%']}%" if usa else "N/A"
+    print(f"\n🗓  {month_label}")
+    print(f"   🏆 TOP 3: " + " | ".join(
+        f"{r['Nation']} (Score:{r['Effort_Score']:.2f}, Fuel:{r['Fuel_L']:.0f}L)"
+        for r in top3
+    ))
+    print(f"   🌍 Total Ops: {total_ops:,} | USA Dominance: {usa_pct}")
 
-print("\n" + "="*80)
-print("🟥 REALTIME STRATEGIC ASSESSMENT")
-print("="*80)
-
-# Top 3 effort
-top3 = nation_effort[:3]
-print("🏆 HIGH COMMITMENT LEADERS:")
-for i, row in enumerate(top3, 1):
-    print(f"{i}. 🇺🇸 {row['Nation']:3s}: {row['Fuel_L']:.0f}L fuel "
-          f"| {row['Ops']:,} ops ({row['Ops%']:.1f}%) "
-          f"| Effort: {row['Effort_Score']:.2f}")
-
-print("\n📈 EFFICIENCY (Ops per Aircraft):")
-efficiency = sorted(nation_effort, key=lambda x: x['Ops']/x['Total_Fleet'], reverse=True)
-for row in efficiency[:5]:
-    eff = row['Ops'] / row['Total_Fleet']
-    print(f"  {row['Nation']:3s}: {eff:.3f} ops/aircraft | {row['Combat_Fleet']:,} combat-ready")
-
-print("\n🌍 GEOPOLITICAL INSIGHTS (Live 2026 Data):")
-print("• 🇺🇸 USA: Unmatched scale — 52% ops @ 17 ops/L")
-print("• 🇪🇺 NATO Europe: Reliable 40% backbone (GBR/FRA/DEU lead)")
-print("• 🇮🇳 IND/🇵🇰 PAK: Asia rising, distance-inefficient")
-print("• Fleet size → ATC capacity: R=0.92 correlation [web:60][web:72]")
-
-print("\n" + "="*80)
-print("REALTIME STATUS: FULLY PREPARED")
-print("USA + Europe = 92% capacity | Asia fills gaps")
-print("="*80)
+print("\n" + "=" * 80)
+print("STATUS: MULTI-MONTH ANALYSIS COMPLETE")
+print("=" * 80)
